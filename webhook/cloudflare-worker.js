@@ -86,6 +86,7 @@ export default {
     } catch {
       return new Response("Bad JSON", { status: 400 });
     }
+    console.log("Received update:", JSON.stringify(body));
 
     // ── 1. Inline button callbacks (👍 / 👎) ────────────────────────────────
     const cb = body?.callback_query;
