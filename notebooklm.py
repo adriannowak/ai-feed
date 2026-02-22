@@ -109,9 +109,19 @@ def _create_notebooklm_notebook(today: str, items: list[dict], brief: str) -> st
     return nb_id
 
 
+def _already_created(today):
+    conn = get_conn()
+    row = conn.execute("SELECT 1 FROM daily_packs WHERE date=?", (today,)).fetchone()
+    conn.close()
+    return row is not None
+
 def create_daily_pack():
     today = date.today().isoformat()
     items = get_today_top_items(DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS)
+
+    if _already_created(today):
+        print(f"[notebooklm] daily pack already created for today ({today})")
+        return
 
     if not items:
         print(f"[notebooklm] no items for today ({today})")
