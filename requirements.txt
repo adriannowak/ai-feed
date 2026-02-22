@@ -6,3 +6,4 @@ numpy
 requests
 python-dotenv
 beautifulsoup4
+python-telegram-bot>=20.0

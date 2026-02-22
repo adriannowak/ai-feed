@@ -31,6 +31,7 @@ jobs:
 
       - name: Save feedback
         env:
+          USER_ID: ${{ github.event.client_payload.user_id }}
           ITEM_ID: ${{ github.event.client_payload.item_id }}
           SIGNAL: ${{ github.event.client_payload.signal }}
         run: | 

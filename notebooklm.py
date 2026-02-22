@@ -4,9 +4,9 @@ import requests
 from datetime import date
 from groq import Groq
 from config import DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS
-from db import get_today_top_items, get_conn
-
+from db import get_today_top_items, save_daily_pack, get_all_users, get_conn
 from notifier import notify_summary
+
 
 def get_groq_client():
     """Lazily construct and return a Groq client using GROQ_API_KEY from env.
@@ -109,38 +109,44 @@ def _create_notebooklm_notebook(today: str, items: list[dict], brief: str) -> st
     return nb_id
 
 
-def _already_created(today):
+def _already_created(user_id: int, today: str) -> bool:
     conn = get_conn()
-    row = conn.execute("SELECT 1 FROM daily_packs WHERE date=?", (today,)).fetchone()
+    row = conn.execute(
+        "SELECT 1 FROM daily_packs WHERE user_id=? AND date=?", (user_id, today)
+    ).fetchone()
     conn.close()
     return row is not None
 
+
 def create_daily_pack():
     today = date.today().isoformat()
-    items = get_today_top_items(DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS)
-
-    if _already_created(today):
-        print(f"[notebooklm] daily pack already created for today ({today})")
+    users = get_all_users()
+    if not users:
+        print(f"[notebooklm] no users registered")
         return
 
-    if not items:
-        print(f"[notebooklm] no items for today ({today})")
-        return
+    for user in users:
+        user_id = user["user_id"]
 
-    print(f"[notebooklm] building daily pack for {today} ({len(items)} articles)")
-    brief = _generate_brief(items)
-    brief_file = _save_daily_pack(today, items, brief)
-    nb_id = _create_notebooklm_notebook(today, items, brief)
+        if _already_created(user_id, today):
+            print(f"[notebooklm] daily pack already created for user={user_id} today ({today})")
+            continue
 
-    conn = get_conn()
-    conn.execute("""
-        INSERT OR REPLACE INTO daily_packs (date, item_ids, brief_md, nb_id)
-        VALUES (?, ?, ?, ?)
-    """, (today, json.dumps([i["id"] for i in items]), brief, nb_id))
-    conn.commit()
-    conn.close()
+        items = get_today_top_items(user_id, DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS)
 
-    with open(brief_file, "r") as text:
-        print(f"[notebooklm] sending notification for {today} brief...")
-        notify_summary(text.read())
-    print(f"[notebooklm] done. NotebookLM id: {nb_id or 'n/a (saved locally)'}")
+        if not items:
+            print(f"[notebooklm] no items for user={user_id} today ({today})")
+            continue
+
+        print(f"[notebooklm] building daily pack for user={user_id} on {today} ({len(items)} articles)")
+        brief = _generate_brief(items)
+        brief_file = _save_daily_pack(today, items, brief)
+        nb_id = _create_notebooklm_notebook(today, items, brief)
+
+        save_daily_pack(user_id, today, [i["id"] for i in items], brief)
+
+        with open(brief_file) as f:
+            print(f"[notebooklm] sending summary notification to user={user_id}...")
+            notify_summary(user_id, f.read())
+
+        print(f"[notebooklm] done for user={user_id}. NotebookLM id: {nb_id or 'n/a (saved locally)'}")

@@ -1,12 +1,11 @@
-name: Poll AI Feeds
+name: Bot Command
 
 on:
-  schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+  repository_dispatch:
+    types: [bot_command]
 
 jobs:
-  poll:
+  handle:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -31,7 +30,7 @@ jobs:
             ~/.cache/torch
             ~/.cache/transformers
             .venv
-          key: ${{ runner.os }}-python-${{ matrix.python-version || '3.11' }}-deps-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-python-3.11-deps-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-python-deps-
 
@@ -43,27 +42,29 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --cache-dir ~/.cache/pip -r requirements.txt
 
-      - name: Run poll pipeline
+      - name: Handle bot command
         env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
+          USER_ID: ${{ github.event.client_payload.user_id }}
+          CHAT_ID: ${{ github.event.client_payload.chat_id }}
+          USERNAME: ${{ github.event.client_payload.username }}
+          COMMAND: ${{ github.event.client_payload.command }}
+          ARGS: ${{ github.event.client_payload.args }}
         run: |
-          # Activate the cached or freshly created virtualenv
           if [ -f .venv/bin/activate ]; then
             source .venv/bin/activate
           fi
-          python run_poll.py
+          python run_command.py
 
-      - name: Commit updated DB back to repo
+      - name: Commit updated DB
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Pull latest changes first to avoid non-fast-forward rejections
           git pull --rebase --autostash origin main || true
-          
+
           git add feed.db
           git diff --staged --quiet && echo "No changes to commit" && exit 0
-          
-          git commit -m "chore: update feed db [skip ci]"
+
+          git commit -m "bot: ${{ github.event.client_payload.command }} by user ${{ github.event.client_payload.user_id }} [skip ci]"
           git push origin HEAD:main || echo "Push failed, will retry on next run"

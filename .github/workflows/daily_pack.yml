@@ -46,8 +46,6 @@ jobs:
       - name: Generate daily pack
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
         run: |
           # Activate the cached or freshly created virtualenv
@@ -55,3 +53,17 @@ jobs:
             source .venv/bin/activate
           fi
           python run_daily.py
+
+      - name: Commit daily pack files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Pull latest changes first to avoid non-fast-forward rejections
+          git pull --rebase --autostash origin main || true
+          
+          git add feed.db daily_packs/
+          git diff --staged --quiet || git commit -m "chore: daily pack $(date +%Y-%m-%d) [skip ci]"
+          
+          git push origin HEAD:main || echo "Push failed, will retry on next run"
+
