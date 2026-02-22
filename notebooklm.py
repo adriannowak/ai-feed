@@ -10,7 +10,7 @@ from notifier import notify_summary
 logger = logging.getLogger(__name__)
 
 
-def _generate_brief(items: list[dict]) -> str:
+def _generate_brief(items: list[dict]) -> str | None:
     items_text = "\n\n".join(
         f"Title: {i['title']}\nSource: {i.get('source','')}\nURL: {i['url']}\n"
         f"Topics: {i.get('llm_topics','')}\nSummary: {i.get('summary') or i.get('text','')[:500]}"
@@ -27,13 +27,16 @@ Write a concise daily brief in Markdown:
 3. **Suggested questions to explore** in NotebookLM (5 questions)
 
 Be concise and technical."""
-
-    resp = chat_with_retry(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-    )
-    return resp.choices[0].message.content
+    try:
+        resp = chat_with_retry(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        return resp.choices[0].message.content
+    except Exception as e:
+        logger.error("Error generating brief: %s", e)
+        return None
 
 
 def _save_daily_pack(today: str, items: list[dict], brief: str) -> str:
@@ -127,6 +130,9 @@ def create_daily_pack():
 
         logger.info("building daily pack for user=%s on %s (%d articles)", user_id, today, len(items))
         brief = _generate_brief(items)
+        if not brief:
+            notify_summary(user_id, "❌ Error generating daily brief. Please check your NotebookLM integration.")
+            return
         brief_file = _save_daily_pack(today, items, brief)
         nb_id = _create_notebooklm_notebook(today, items, brief)
 
