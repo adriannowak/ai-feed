@@ -21,16 +21,27 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Cache pip + model
+      - name: Cache pip + model + venv
+        id: cache-pip
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/pip
             ~/.cache/huggingface
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+            ~/.cache/torch
+            ~/.cache/transformers
+            .venv
+          key: ${{ runner.os }}-python-${{ matrix.python-version || '3.11' }}-deps-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-python-deps-
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install dependencies (only on cache miss)
+        if: steps.cache-pip.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install --cache-dir ~/.cache/pip -r requirements.txt
 
       - name: Generate daily pack
         env:
@@ -44,6 +55,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Pull latest changes first to avoid non-fast-forward rejections
+          git pull --rebase --autostash origin main || true
+          
           git add feed.db daily_packs/
           git diff --staged --quiet || git commit -m "chore: daily pack $(date +%Y-%m-%d) [skip ci]"
+          
+          git push origin HEAD:main || echo "Push failed, will retry on next run"
+
           git push

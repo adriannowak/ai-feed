@@ -6,7 +6,19 @@ from groq import Groq
 from config import DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS
 from db import get_today_top_items, get_conn
 
-groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
+
+def get_groq_client():
+    """Lazily construct and return a Groq client using GROQ_API_KEY from env.
+
+    Raises a RuntimeError with a helpful message if the env var is missing so
+    imports don't fail at module import time.
+    """
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GROQ_API_KEY is not set in the environment. Set it or provide a mock for local runs."
+        )
+    return Groq(api_key=api_key)
 
 
 def _generate_brief(items: list[dict]) -> str:
@@ -27,6 +39,7 @@ Write a concise daily brief in Markdown:
 
 Be concise and technical."""
 
+    groq_client = get_groq_client()
     resp = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],

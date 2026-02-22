@@ -33,12 +33,20 @@ jobs:
         env:
           ITEM_ID: ${{ github.event.client_payload.item_id }}
           SIGNAL: ${{ github.event.client_payload.signal }}
-        run: python run_feedback.py
+        run: | 
+          # Activate the cached or freshly created virtualenv
+          if [ -f .venv/bin/activate ]; then
+          source .venv/bin/activate
+          fi
+          python run_feedback.py
 
       - name: Commit updated DB
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash origin main || true
+          
           git add feed.db
+
           git diff --staged --quiet || git commit -m "feedback: signal=${{ github.event.client_payload.signal }} [skip ci]"
           git push

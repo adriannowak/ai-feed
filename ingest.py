@@ -27,7 +27,7 @@ def poll_feeds() -> list[dict]:
     new_items = []
     for feed_url in FEEDS:
         feed = feedparser.parse(feed_url)
-        for entry in feed.entries:
+        for entry in feed.entries[:10]:
             url = entry.get("link", "")
             if not url or item_exists(url):
                 continue
