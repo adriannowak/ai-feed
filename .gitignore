@@ -5,4 +5,3 @@ __pycache__/
 *.db-journal
 daily_packs/
 .DS_Store
-feed.db
