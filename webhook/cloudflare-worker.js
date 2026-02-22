@@ -162,7 +162,7 @@ export default {
       }
       if (command === "poll") {
         await sendMessage(env, chat_id, "⏳ Polling for new articles…");
-        dispatchToGitHub(env, "poll", {});
+        await dispatchToGitHub(env, "poll", {});
         return new Response("OK", { status: 200 });
       }
 
