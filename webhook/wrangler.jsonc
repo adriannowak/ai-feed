@@ -3,8 +3,9 @@
   "main": "cloudflare-worker.js",
   "compatibility_date": "2024-06-01",
   "observability": {
-  "logs": {
-    "enabled": true,
-    "invocation_logs": true
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
   }
 }
