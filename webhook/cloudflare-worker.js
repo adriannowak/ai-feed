@@ -157,8 +157,8 @@ export default {
       const args = rest.join(" ");
 
       // ACK the user immediately so Telegram doesn't show the message as pending
-      await sendMessage(env, chat_id, "⏳ Processing…");
-
+      response = await sendMessage(env, chat_id, "⏳ Processing…");
+      console.log("Sent ACK message, response status:", response);
       // Dispatch to GitHub Actions — run_command.py will send the real reply
       await dispatchToGitHub(env, "bot_command", {
         user_id,
