@@ -83,6 +83,8 @@ async def add_feed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     url = context.args[0].strip()
 
+    await update.message.reply_text("⏳ Validating feed…")
+
     # Validate by parsing the feed
     feed = feedparser.parse(url)
     if feed.bozo and not feed.entries:
