@@ -59,42 +59,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Pull latest changes first to avoid non-fast-forward rejections
+          git pull --rebase --autostash origin main || true
+          
           git add feed.db
-          # If there are no staged changes, exit successfully
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          
           git commit -m "chore: update feed db [skip ci]"
-
-          # Try a normal push first. If it's rejected because the remote moved,
-          # attempt to fetch and rebase, then push again. If the rebase fails due
-          # to conflicts, abort the rebase and skip pushing to avoid overwriting
-          # remote changes.
-          set -o pipefail
-          if git push origin HEAD:main; then
-            echo "Pushed feed.db successfully"
-            exit 0
-          fi
-
-          echo "Push rejected, fetching remote and attempting rebase"
-          git fetch origin main
-
-          if git pull --rebase --autostash origin main; then
-            echo "Rebase succeeded; pushing"
-            if git push origin HEAD:main; then
-              echo "Pushed after rebase"
-              exit 0
-            else
-              echo "Push failed after rebase; attempting force-with-lease"
-              git push --force-with-lease origin HEAD:main && exit 0 || {
-                echo "Force-with-lease also failed; skipping push"
-                exit 0
-              }
-            fi
-          else
-            echo "Rebase failed (merge conflicts). Aborting rebase and skipping push to avoid overwriting remote changes."
-            git rebase --abort || true
-            exit 0
-          fi
+          git push origin HEAD:main || echo "Push failed, will retry on next run"
