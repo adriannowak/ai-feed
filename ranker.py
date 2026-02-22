@@ -7,11 +7,24 @@ from config import (
     COLD_START_KEYWORDS,
 )
 from embeddings import embed_item, store_embedding, max_similarity_to_liked, min_similarity_to_disliked
-from profile import build_preference_profile, profile_to_text
+from user_profile import build_preference_profile, profile_to_text
 from db import get_liked_items, get_disliked_items, update_item_score
 
-groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
 JUDGE_MODEL = "llama-3.3-70b-versatile"
+
+
+def get_groq_client():
+    """Lazily construct and return a Groq client using GROQ_API_KEY from env.
+
+    Raises a RuntimeError with a helpful message if the env var is missing so
+    imports don't fail at module import time.
+    """
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GROQ_API_KEY is not set in the environment. Set it or provide a mock for local runs."
+        )
+    return Groq(api_key=api_key)
 
 
 def _cold_start_matches(item: dict) -> bool:
@@ -43,6 +56,7 @@ Respond ONLY with valid JSON:
   "reason": "..."
 }}"""
 
+    groq_client = get_groq_client()
     resp = groq_client.chat.completions.create(
         model=JUDGE_MODEL,
         messages=[{"role": "user", "content": prompt}],

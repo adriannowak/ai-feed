@@ -1,43 +1,63 @@
-import json
-from db import get_liked_items, get_disliked_items
+"""
+Shim to avoid shadowing the standard-library `profile` module.
 
+When a local file named `profile.py` exists in the project root, an `import profile`
+from third-party packages (for example, parts of torch) will load this file and
+prevent the real library module from being imported. That breaks code that
+expects stdlib's `profile` (which defines `run`, etc.).
 
-def build_preference_profile() -> dict:
-    liked = get_liked_items(limit=30)
-    disliked = get_disliked_items(limit=20)
+This shim loads the real stdlib `profile.py` from the interpreter's stdlib
+location, executes it under a private name, and re-exports its public
+attributes so third-party imports work as expected.
 
-    liked_titles = [i["title"] for i in liked if i.get("title")]
-    disliked_titles = [i["title"] for i in disliked if i.get("title")]
+Note: project-specific preference/profile helpers live in `user_profile.py` and
+should be used instead of this module.
+"""
 
-    liked_topics = []
-    for i in liked:
-        if i.get("llm_topics"):
-            try:
-                liked_topics.extend(json.loads(i["llm_topics"]))
-            except Exception:
-                pass
+import importlib.util
+import sys
+import os
+import sysconfig
 
-    from collections import Counter
-    top_topics = [t for t, _ in Counter(liked_topics).most_common(15)]
+# Try to locate the stdlib's profile.py file
+stdlib_dir = None
+try:
+    stdlib_dir = sysconfig.get_paths().get("stdlib")
+except Exception:
+    stdlib_dir = None
 
-    return {
-        "liked_titles": liked_titles,
-        "disliked_titles": disliked_titles,
-        "top_topics": top_topics,
-        "has_history": len(liked) >= 5,
-    }
+if not stdlib_dir:
+    # Fallback: derive from the os module location
+    stdlib_dir = os.path.dirname(os.__file__)
 
+stdlib_profile_path = os.path.join(stdlib_dir, "profile.py")
 
-def profile_to_text(profile: dict) -> str:
-    lines = []
-    if profile["top_topics"]:
-        lines.append(f"Topics I like: {', '.join(profile['top_topics'])}")
-    if profile["liked_titles"]:
-        lines.append("Recent articles I liked:")
-        for t in profile["liked_titles"][:10]:
-            lines.append(f"  + {t}")
-    if profile["disliked_titles"]:
-        lines.append("Recent articles I did NOT like:")
-        for t in profile["disliked_titles"][:10]:
-            lines.append(f"  - {t}")
-    return "\n".join(lines) if lines else "No preference history yet."
+if os.path.exists(stdlib_profile_path):
+    spec = importlib.util.spec_from_file_location("_stdlib_profile", stdlib_profile_path)
+    stdlib_profile = importlib.util.module_from_spec(spec)
+    # Execute the stdlib profile module in its module object
+    try:
+        spec.loader.exec_module(stdlib_profile)
+    except Exception:
+        # If loading stdlib profile fails, expose a minimal fallback below
+        stdlib_profile = None
+
+    if stdlib_profile:
+        # Re-export non-dunder attributes from stdlib.profile
+        for _name in dir(stdlib_profile):
+            if _name.startswith("__"):
+                continue
+            globals()[_name] = getattr(stdlib_profile, _name)
+        __all__ = [n for n in dir(stdlib_profile) if not n.startswith("__")]
+    else:
+        # Minimal fallback: provide a `run` function that raises a clear error
+        def run(*args, **kwargs):
+            raise RuntimeError("Could not load the standard-library 'profile' module")
+
+        __all__ = ["run"]
+else:
+    # If stdlib profile.py was not found (very unusual), provide a clear fallback
+    def run(*args, **kwargs):
+        raise RuntimeError("Standard-library 'profile.py' not found on this installation")
+
+    __all__ = ["run"]

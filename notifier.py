@@ -2,11 +2,15 @@ import os
 import requests
 from db import mark_notified
 
-BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-
 
 def notify_item(item: dict):
+    BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+    CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+    if not BOT_TOKEN or not CHAT_ID:
+        raise RuntimeError(
+            "Telegram bot not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in the environment to enable notifications."
+        )
+
     topics = ", ".join(item.get("topics", []))
     text = (
         f"📰 *{item['title']}*\n"

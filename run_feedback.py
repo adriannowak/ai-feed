@@ -3,6 +3,9 @@ Called by the feedback GH Actions workflow (repository_dispatch).
 Reads ITEM_ID and SIGNAL from env vars, writes to DB.
 """
 import os
+
+from dotenv import load_dotenv
+
 from db import init_db, add_feedback
 
 
@@ -15,4 +18,6 @@ def main():
 
 
 if __name__ == "__main__":
+    load_dotenv()
+
     main()
