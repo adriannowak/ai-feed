@@ -156,6 +156,15 @@ export default {
       const [raw_command, ...rest] = full_text.split(/\s+/);
       const command = raw_command.split("@")[0].replace("/", "").toLowerCase();
       const args = rest.join(" ");
+      if (!["start", "add", "track", "feeds", "poll"].includes(command)) {
+        await sendMessage(env, chat_id, "❓ Unknown command. Available: /start, /add, /track, /feeds, /pool");
+        return new Response("OK", { status: 200 });
+      }
+      if (command === "poll") {
+        await sendMessage(env, chat_id, "⏳ Polling for new articles…");
+        dispatchToGitHub(env, "poll", {});
+        return new Response("OK", { status: 200 });
+      }
 
       // ACK the user immediately so Telegram doesn't show the message as pending
       (async () => {
