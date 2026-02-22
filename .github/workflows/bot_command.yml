@@ -45,6 +45,7 @@ jobs:
       - name: Handle bot command
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
           USER_ID: ${{ github.event.client_payload.user_id }}
           CHAT_ID: ${{ github.event.client_payload.chat_id }}
           USERNAME: ${{ github.event.client_payload.username }}

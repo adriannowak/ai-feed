@@ -19,7 +19,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from config import FEEDS
+from config import FEEDS, ALLOWED_USER_IDS
 from db import (
     add_tracked_article,
     add_user_feed,
@@ -37,9 +37,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _is_allowed(user_id: int) -> bool:
+    """Return True if the user is on the invite-only allowlist."""
+    return user_id in ALLOWED_USER_IDS
+
+
+async def _deny(update: Update) -> None:
+    """Send a consistent rejection message."""
+    await update.message.reply_text(
+        "⛔ Sorry, this bot is invite-only. Contact the owner to request access."
+    )
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/start — register user and subscribe to default feeds."""
     user = update.effective_user
+    if not _is_allowed(user.id):
+        await _deny(update)
+        return
     register_user(user.id, user.username)
 
     for feed_url in FEEDS:
@@ -56,6 +71,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def add_feed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/add <rss_url> — subscribe the user to an RSS feed."""
     user = update.effective_user
+    if not _is_allowed(user.id):
+        await _deny(update)
+        return
     register_user(user.id, user.username)
 
     if not context.args:
@@ -80,6 +98,9 @@ async def add_feed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def track_article(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/track <article_url> — seed preference profile with a specific article."""
     user = update.effective_user
+    if not _is_allowed(user.id):
+        await _deny(update)
+        return
     register_user(user.id, user.username)
 
     if not context.args:
@@ -117,6 +138,9 @@ async def track_article(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def list_feeds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/feeds — list the user's current feed subscriptions."""
     user = update.effective_user
+    if not _is_allowed(user.id):
+        await _deny(update)
+        return
     register_user(user.id, user.username)
 
     feeds = get_user_feeds(user.id)
@@ -131,13 +155,17 @@ async def list_feeds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def handle_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle 👍 / 👎 inline keyboard callbacks."""
     query = update.callback_query
-    await query.answer()
-
     user_id = query.from_user.id
+
+    if not _is_allowed(user_id):
+        await query.answer("⛔ Access denied.")
+        return
+
     data = query.data  # "like:<item_id>" or "dislike:<item_id>"
 
     parts = data.split(":", 1)
     if len(parts) != 2:
+        await query.answer()
         return
 
     action, item_id = parts

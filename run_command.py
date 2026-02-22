@@ -18,7 +18,7 @@ import requests
 
 from dotenv import load_dotenv
 
-from config import FEEDS
+from config import FEEDS, ALLOWED_USER_IDS
 from db import (
     add_tracked_article,
     add_user_feed,
@@ -125,6 +125,15 @@ def main() -> None:
     args = os.environ.get("ARGS", "").strip()
 
     print(f"[run_command] user={user_id} command={command} args={args!r}")
+
+    if user_id not in ALLOWED_USER_IDS:
+        print(f"[run_command] DENIED: user={user_id} is not on the allowlist")
+        _reply(
+            bot_token,
+            chat_id,
+            "⛔ Sorry, this bot is invite-only. Contact the owner to request access.",
+        )
+        return
 
     if command == "start":
         handle_start(bot_token, user_id, chat_id, username)

@@ -5,6 +5,8 @@
  *   TELEGRAM_BOT_TOKEN  — your bot token
  *   GH_PAT              — GitHub Personal Access Token (repo scope)
  *   GITHUB_REPO         — e.g. "adriannowak/ai-feed"
+ *   ALLOWED_USER_IDS    — comma-separated Telegram user IDs that may use the bot
+ *                         e.g. "123456789,987654321"  (leave empty to deny everyone)
  *
  * After deploying, register this worker as your Telegram webhook (one-time):
  *   curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
@@ -45,6 +47,31 @@ async function dispatchToGitHub(env, event_type, client_payload) {
   );
 }
 
+/**
+ * Parse the ALLOWED_USER_IDS env var into a Set of numeric IDs.
+ * Returns an empty Set if the variable is not set or empty.
+ */
+function getAllowedIds(env) {
+  const raw = env.ALLOWED_USER_IDS || "";
+  const ids = new Set();
+  for (const part of raw.split(",")) {
+    const n = Number(part.trim());
+    if (Number.isInteger(n) && n > 0) ids.add(n);
+  }
+  return ids;
+}
+
+async function sendMessage(env, chat_id, text) {
+  return fetch(
+    `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id, text }),
+    }
+  );
+}
+
 export default {
   async fetch(request, env) {
 
@@ -63,6 +90,25 @@ export default {
     // ── 1. Inline button callbacks (👍 / 👎) ────────────────────────────────
     const cb = body?.callback_query;
     if (cb) {
+      const user_id = cb.from.id;
+      const allowedIds = getAllowedIds(env);
+
+      if (!allowedIds.has(user_id)) {
+        await fetch(
+          `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callback_query_id: cb.id,
+              text: "⛔ Access denied.",
+              show_alert: true,
+            }),
+          }
+        );
+        return new Response("OK", { status: 200 });
+      }
+
       // Immediately answer to remove the loading spinner
       await fetch(
         `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
@@ -79,7 +125,6 @@ export default {
       const [action, item_id] = cb.data.split(":");
       if (item_id) {
         const signal = action === "like" ? 1 : -1;
-        const user_id = cb.from.id;
         await dispatchToGitHub(env, "feedback", { item_id, signal, user_id });
       }
 
@@ -92,6 +137,16 @@ export default {
       const user_id = msg.from.id;
       const chat_id = msg.chat.id;
       const username = msg.from.username || "";
+      const allowedIds = getAllowedIds(env);
+
+      if (!allowedIds.has(user_id)) {
+        await sendMessage(
+          env,
+          chat_id,
+          "⛔ Sorry, this bot is invite-only. Contact the owner to request access."
+        );
+        return new Response("OK", { status: 200 });
+      }
 
       // Parse "/command args…" — strip bot mention (e.g. /start@mybot)
       const full_text = msg.text.trim();
@@ -100,17 +155,7 @@ export default {
       const args = rest.join(" ");
 
       // ACK the user immediately so Telegram doesn't show the message as pending
-      await fetch(
-        `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id,
-            text: "⏳ Processing…",
-          }),
-        }
-      );
+      await sendMessage(env, chat_id, "⏳ Processing…");
 
       // Dispatch to GitHub Actions — run_command.py will send the real reply
       await dispatchToGitHub(env, "bot_command", {
