@@ -158,7 +158,7 @@ export default {
 
       // ACK the user immediately so Telegram doesn't show the message as pending
       (async () => {
-            response = await sendMessage(env, chat_id, "Processing…");
+            response = await sendMessage(env, chat_id, "Processing... ⏳");
             console.log("Sent ACK message, response status:", response);
       })();
       // Dispatch to GitHub Actions — run_command.py will send the real reply
