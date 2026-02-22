@@ -1,10 +1,12 @@
 import json
-from db import get_liked_items, get_disliked_items
+from collections import Counter
+from db import get_liked_items, get_disliked_items, get_tracked_embeddings
 
 
-def build_preference_profile() -> dict:
-    liked = get_liked_items(limit=30)
-    disliked = get_disliked_items(limit=20)
+def build_preference_profile(user_id: int) -> dict:
+    liked = get_liked_items(user_id, limit=30)
+    disliked = get_disliked_items(user_id, limit=20)
+    tracked_embeddings = get_tracked_embeddings(user_id)
 
     liked_titles = [i["title"] for i in liked if i.get("title")]
     disliked_titles = [i["title"] for i in disliked if i.get("title")]
@@ -17,14 +19,14 @@ def build_preference_profile() -> dict:
             except Exception:
                 pass
 
-    from collections import Counter
     top_topics = [t for t, _ in Counter(liked_topics).most_common(15)]
 
     return {
         "liked_titles": liked_titles,
         "disliked_titles": disliked_titles,
         "top_topics": top_topics,
-        "has_history": len(liked) >= 5,
+        "tracked_embeddings": tracked_embeddings,
+        "has_history": len(liked) >= 5 or len(tracked_embeddings) > 0,
     }
 
 

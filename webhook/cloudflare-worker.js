@@ -52,6 +52,7 @@ export default {
       return new Response("OK", { status: 200 });
     }
     const signal = action === "like" ? 1 : -1;
+    const user_id = cb.from.id;
 
     // fire GitHub repository_dispatch → triggers feedback.yml workflow
     await fetch(
@@ -66,7 +67,7 @@ export default {
         },
         body: JSON.stringify({
           event_type: "feedback",
-          client_payload: { item_id, signal },
+          client_payload: { item_id, signal, user_id },
         }),
       }
     );

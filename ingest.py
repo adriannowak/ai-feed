@@ -22,10 +22,19 @@ def _fetch_text(url: str) -> str | None:
     )
 
 
-def poll_feeds() -> list[dict]:
-    """Fetch all feeds, return new unseen items."""
+def poll_feeds(feed_urls: list[str] | None = None) -> list[dict]:
+    """Fetch feeds, return new unseen items.
+
+    Args:
+        feed_urls: List of RSS feed URLs to poll. Defaults to FEEDS from config.
+
+    Returns:
+        List of new item dicts, each including a ``feed_url`` key indicating
+        which feed the item came from.
+    """
+    urls = feed_urls if feed_urls is not None else FEEDS
     new_items = []
-    for feed_url in FEEDS:
+    for feed_url in urls:
         feed = feedparser.parse(feed_url)
         for entry in feed.entries[:10]:
             url = entry.get("link", "")
@@ -43,6 +52,7 @@ def poll_feeds() -> list[dict]:
                 "source": feed.feed.get("title", feed_url),
                 "published": published,
                 "text": text[:8000],
+                "feed_url": feed_url,
             }
             insert_item(item)
             new_items.append(item)

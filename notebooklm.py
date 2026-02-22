@@ -4,7 +4,7 @@ import requests
 from datetime import date
 from groq import Groq
 from config import DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS
-from db import get_today_top_items, get_conn
+from db import get_today_top_items, save_daily_pack, get_all_users
 
 
 def get_groq_client():
@@ -110,23 +110,24 @@ def _create_notebooklm_notebook(today: str, items: list[dict], brief: str) -> st
 
 def create_daily_pack():
     today = date.today().isoformat()
-    items = get_today_top_items(DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS)
-
-    if not items:
-        print(f"[notebooklm] no items for today ({today})")
+    users = get_all_users()
+    if not users:
+        print(f"[notebooklm] no users registered")
         return
 
-    print(f"[notebooklm] building daily pack for {today} ({len(items)} articles)")
-    brief = _generate_brief(items)
-    _save_daily_pack(today, items, brief)
-    nb_id = _create_notebooklm_notebook(today, items, brief)
+    for user in users:
+        user_id = user["user_id"]
+        items = get_today_top_items(user_id, DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS)
 
-    conn = get_conn()
-    conn.execute("""
-        INSERT OR REPLACE INTO daily_packs (date, item_ids, brief_md, nb_id)
-        VALUES (?, ?, ?, ?)
-    """, (today, json.dumps([i["id"] for i in items]), brief, nb_id))
-    conn.commit()
-    conn.close()
+        if not items:
+            print(f"[notebooklm] no items for user={user_id} today ({today})")
+            continue
 
-    print(f"[notebooklm] done. NotebookLM id: {nb_id or 'n/a (saved locally)'}")
+        print(f"[notebooklm] building daily pack for user={user_id} on {today} ({len(items)} articles)")
+        brief = _generate_brief(items)
+        _save_daily_pack(today, items, brief)
+        nb_id = _create_notebooklm_notebook(today, items, brief)
+
+        save_daily_pack(user_id, today, [i["id"] for i in items], brief)
+
+        print(f"[notebooklm] done for user={user_id}. NotebookLM id: {nb_id or 'n/a (saved locally)'}")

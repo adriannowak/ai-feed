@@ -6,9 +6,9 @@ from config import (
     LLM_SCORE_THRESHOLD,
     COLD_START_KEYWORDS,
 )
-from embeddings import embed_item, store_embedding, max_similarity_to_liked, min_similarity_to_disliked
+from embeddings import embed_item, store_embedding, max_similarity_to_liked, min_similarity_to_disliked, cosine_similarity
 from user_profile import build_preference_profile, profile_to_text
-from db import get_liked_items, get_disliked_items, update_item_score
+from db import get_liked_items, get_disliked_items, save_user_score
 
 JUDGE_MODEL = "llama-3.3-70b-versatile"
 
@@ -66,10 +66,10 @@ Respond ONLY with valid JSON:
     return json.loads(resp.choices[0].message.content)
 
 
-def score_item(item: dict) -> dict | None:
-    profile = build_preference_profile()
-    liked = get_liked_items()
-    disliked = get_disliked_items()
+def score_item(item: dict, user_id: int) -> dict | None:
+    profile = build_preference_profile(user_id)
+    liked = get_liked_items(user_id)
+    disliked = get_disliked_items(user_id)
 
     emb = embed_item(item)
     store_embedding(item["id"], emb)
@@ -79,10 +79,17 @@ def score_item(item: dict) -> dict | None:
             return None
         profile_text = "No history yet. Focus on AI/ML research, LLM serving, inference optimization."
         result = _llm_judge(item, profile_text)
-        update_item_score(item["id"], result["score"], result["topics"], result["reason"])
+        save_user_score(user_id, item["id"], result["score"], result["topics"], result["reason"])
         return {**item, **result} if result["score"] >= LLM_SCORE_THRESHOLD else None
 
     sim_liked = max_similarity_to_liked(emb, liked)
+
+    # Boost similarity using tracked article embeddings
+    tracked_embs = profile.get("tracked_embeddings", [])
+    if tracked_embs:
+        tracked_sims = [cosine_similarity(emb, te) for te in tracked_embs]
+        sim_liked = max(sim_liked, max(tracked_sims))
+
     sim_disliked = min_similarity_to_disliked(emb, disliked)
     adj_score = sim_liked - 0.5 * sim_disliked
 
@@ -91,7 +98,7 @@ def score_item(item: dict) -> dict | None:
 
     profile_text = profile_to_text(profile)
     result = _llm_judge(item, profile_text)
-    update_item_score(item["id"], result["score"], result["topics"], result["reason"])
+    save_user_score(user_id, item["id"], result["score"], result["topics"], result["reason"])
 
     if result["score"] >= LLM_SCORE_THRESHOLD:
         return {**item, **result}
