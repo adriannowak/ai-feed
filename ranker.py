@@ -59,13 +59,13 @@ Respond ONLY with valid JSON:
   "reason": "..."
 }}"""
 
-    resp = chat_with_retry(
-        model=JUDGE_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0,
-        response_format={"type": "json_object"},
-    )
     try:
+        resp = chat_with_retry(
+            model=JUDGE_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
         return json.loads(resp.choices[0].message.content)
     except (json.JSONDecodeError, AttributeError, IndexError, RateLimitError) as exc:
         logger.error("Failed to parse LLM response for item %s: %s", item.get("id"), exc)
