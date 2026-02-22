@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Invite-only allowlist — comma-separated Telegram user IDs.
 # Only users whose ID is in this set can interact with the bot.
