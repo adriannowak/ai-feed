@@ -49,7 +49,12 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
-        run: python run_daily.py
+        run: |
+          # Activate the cached or freshly created virtualenv
+          if [ -f .venv/bin/activate ]; then
+            source .venv/bin/activate
+          fi
+          python run_daily.py
 
       - name: Commit daily pack files
         run: |
@@ -64,4 +69,3 @@ jobs:
           
           git push origin HEAD:main || echo "Push failed, will retry on next run"
 
-          git push
