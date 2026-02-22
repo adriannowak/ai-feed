@@ -157,7 +157,7 @@ export default {
       const command = raw_command.split("@")[0].replace("/", "").toLowerCase();
       const args = rest.join(" ");
       if (!["start", "add", "track", "feeds", "poll", "daily"].includes(command)) {
-        await sendMessage(env, chat_id, "❓ Unknown command. Available: /start, /add, /track, /feeds, /pool, /daily");
+        await sendMessage(env, chat_id, "❓ Unknown command. Available: /start, /add, /track, /feeds, /poll, /daily");
         return new Response("OK", { status: 200 });
       }
       if (command === "poll" || command == "daily") {
