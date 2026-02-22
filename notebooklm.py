@@ -4,7 +4,8 @@ import requests
 from datetime import date
 from groq import Groq
 from config import DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS
-from db import get_today_top_items, save_daily_pack, get_all_users
+from db import get_today_top_items, save_daily_pack, get_all_users, get_conn
+from notifier import notify_summary
 
 
 def get_groq_client():
@@ -108,6 +109,15 @@ def _create_notebooklm_notebook(today: str, items: list[dict], brief: str) -> st
     return nb_id
 
 
+def _already_created(user_id: int, today: str) -> bool:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT 1 FROM daily_packs WHERE user_id=? AND date=?", (user_id, today)
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
 def create_daily_pack():
     today = date.today().isoformat()
     users = get_all_users()
@@ -117,6 +127,11 @@ def create_daily_pack():
 
     for user in users:
         user_id = user["user_id"]
+
+        if _already_created(user_id, today):
+            print(f"[notebooklm] daily pack already created for user={user_id} today ({today})")
+            continue
+
         items = get_today_top_items(user_id, DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS)
 
         if not items:
@@ -125,9 +140,13 @@ def create_daily_pack():
 
         print(f"[notebooklm] building daily pack for user={user_id} on {today} ({len(items)} articles)")
         brief = _generate_brief(items)
-        _save_daily_pack(today, items, brief)
+        brief_file = _save_daily_pack(today, items, brief)
         nb_id = _create_notebooklm_notebook(today, items, brief)
 
         save_daily_pack(user_id, today, [i["id"] for i in items], brief)
+
+        with open(brief_file) as f:
+            print(f"[notebooklm] sending summary notification to user={user_id}...")
+            notify_summary(user_id, f.read())
 
         print(f"[notebooklm] done for user={user_id}. NotebookLM id: {nb_id or 'n/a (saved locally)'}")
