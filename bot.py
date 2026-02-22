@@ -63,6 +63,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "Welcome! 🎉\n\n"
         "Use /add <rss_url> to subscribe to additional feeds.\n"
+        "Use /feeds to see your current subscriptions.\n"
         "Use /track <article_url> to seed your taste profile with a specific article.\n\n"
         f"You are now subscribed to {len(FEEDS)} default feed(s)."
     )
