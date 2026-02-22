@@ -1,6 +1,8 @@
 import json
 import logging
 
+from groq import RateLimitError
+
 from config import (
     COLD_START_KEYWORDS,
     EMBEDDING_SIMILARITY_THRESHOLD,
@@ -65,7 +67,7 @@ Respond ONLY with valid JSON:
     )
     try:
         return json.loads(resp.choices[0].message.content)
-    except (json.JSONDecodeError, AttributeError, IndexError) as exc:
+    except (json.JSONDecodeError, AttributeError, IndexError, RateLimitError) as exc:
         logger.error("Failed to parse LLM response for item %s: %s", item.get("id"), exc)
         return None
 
