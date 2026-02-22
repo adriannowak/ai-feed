@@ -156,13 +156,13 @@ export default {
       const [raw_command, ...rest] = full_text.split(/\s+/);
       const command = raw_command.split("@")[0].replace("/", "").toLowerCase();
       const args = rest.join(" ");
-      if (!["start", "add", "track", "feeds", "poll"].includes(command)) {
-        await sendMessage(env, chat_id, "❓ Unknown command. Available: /start, /add, /track, /feeds, /pool");
+      if (!["start", "add", "track", "feeds", "poll", "daily"].includes(command)) {
+        await sendMessage(env, chat_id, "❓ Unknown command. Available: /start, /add, /track, /feeds, /pool, /daily");
         return new Response("OK", { status: 200 });
       }
-      if (command === "poll") {
+      if (command === "poll" || command == "daily") {
         await sendMessage(env, chat_id, "⏳ Polling for new articles…");
-        await dispatchToGitHub(env, "poll", {});
+        await dispatchToGitHub(env, command, {});
         return new Response("OK", { status: 200 });
       }
 
