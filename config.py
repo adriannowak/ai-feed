@@ -1,5 +1,5 @@
 FEEDS = [
-    # "https://huggingface.co/blog/feed.xml",
+    "https://huggingface.co/blog/feed.xml",
     "https://blog.vllm.ai/feed.xml",
     # "https://bair.berkeley.edu/blog/feed.xml",
     # add more here
