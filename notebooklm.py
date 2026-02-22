@@ -1,25 +1,13 @@
+import logging
 import os
-import json
 import requests
 from datetime import date
-from groq import Groq
 from config import DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS
 from db import get_today_top_items, save_daily_pack, get_all_users, get_conn
+from groq_client import chat_with_retry
 from notifier import notify_summary
 
-
-def get_groq_client():
-    """Lazily construct and return a Groq client using GROQ_API_KEY from env.
-
-    Raises a RuntimeError with a helpful message if the env var is missing so
-    imports don't fail at module import time.
-    """
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "GROQ_API_KEY is not set in the environment. Set it or provide a mock for local runs."
-        )
-    return Groq(api_key=api_key)
+logger = logging.getLogger(__name__)
 
 
 def _generate_brief(items: list[dict]) -> str:
@@ -40,8 +28,7 @@ Write a concise daily brief in Markdown:
 
 Be concise and technical."""
 
-    groq_client = get_groq_client()
-    resp = groq_client.chat.completions.create(
+    resp = chat_with_retry(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
@@ -64,7 +51,7 @@ def _save_daily_pack(today: str, items: list[dict], brief: str) -> str:
             title = i["title"].replace('"', "'")
             f.write(f'"{title}",{i["url"]}\n')
 
-    print(f"[notebooklm] saved: {brief_path}, {sources_path}")
+    logger.info("saved: %s, %s", brief_path, sources_path)
     return brief_path
 
 
@@ -74,7 +61,7 @@ def _create_notebooklm_notebook(today: str, items: list[dict], brief: str) -> st
     endpoint = os.environ.get("NOTEBOOKLM_API_ENDPOINT", "us-discoveryengine.googleapis.com")
 
     if not project:
-        print("[notebooklm] No GOOGLE_CLOUD_PROJECT set — saving locally only")
+        logger.info("No GOOGLE_CLOUD_PROJECT set — saving locally only")
         return None
 
     import subprocess
@@ -91,7 +78,7 @@ def _create_notebooklm_notebook(today: str, items: list[dict], brief: str) -> st
     )
     resp.raise_for_status()
     nb_id = resp.json()["notebookId"]
-    print(f"[notebooklm] created notebook: {nb_id}")
+    logger.info("created notebook: %s", nb_id)
 
     for item in items:
         requests.post(
@@ -122,23 +109,23 @@ def create_daily_pack():
     today = date.today().isoformat()
     users = get_all_users()
     if not users:
-        print(f"[notebooklm] no users registered")
+        logger.info("no users registered")
         return
 
     for user in users:
         user_id = user["user_id"]
 
         if _already_created(user_id, today):
-            print(f"[notebooklm] daily pack already created for user={user_id} today ({today})")
+            logger.info("daily pack already created for user=%s today (%s)", user_id, today)
             continue
 
         items = get_today_top_items(user_id, DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS)
 
         if not items:
-            print(f"[notebooklm] no items for user={user_id} today ({today})")
+            logger.info("no items for user=%s today (%s)", user_id, today)
             continue
 
-        print(f"[notebooklm] building daily pack for user={user_id} on {today} ({len(items)} articles)")
+        logger.info("building daily pack for user=%s on %s (%d articles)", user_id, today, len(items))
         brief = _generate_brief(items)
         brief_file = _save_daily_pack(today, items, brief)
         nb_id = _create_notebooklm_notebook(today, items, brief)
@@ -146,7 +133,7 @@ def create_daily_pack():
         save_daily_pack(user_id, today, [i["id"] for i in items], brief)
 
         with open(brief_file) as f:
-            print(f"[notebooklm] sending summary notification to user={user_id}...")
+            logger.info("sending summary notification to user=%s", user_id)
             notify_summary(user_id, f.read())
 
-        print(f"[notebooklm] done for user={user_id}. NotebookLM id: {nb_id or 'n/a (saved locally)'}")
+        logger.info("done for user=%s. NotebookLM id: %s", user_id, nb_id or "n/a (saved locally)")

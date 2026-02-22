@@ -1,11 +1,38 @@
 import hashlib
+import logging
+from datetime import datetime, timezone
+from html.parser import HTMLParser
+from urllib.parse import urljoin, urlparse
+
 import feedparser
 import trafilatura
-from datetime import datetime, timezone
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urlparse
+
 from config import FEEDS
 from db import item_exists, insert_item
+
+logger = logging.getLogger(__name__)
+
+
+class _TitleParser(HTMLParser):
+    """Minimal HTML parser that extracts the content of the ``<title>`` tag."""
+
+    def __init__(self):
+        super().__init__()
+        self.title: str | None = None
+        self._in_title = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "title":
+            self._in_title = True
+
+    def handle_data(self, data):
+        if self._in_title:
+            self.title = data.strip()
+
+    def handle_endtag(self, tag):
+        if tag == "title":
+            self._in_title = False
 
 
 def _make_id(url: str) -> str:
@@ -25,7 +52,7 @@ def _fetch_text(url: str) -> str | None:
             no_fallback=False,
         )
     except Exception as e:
-        print(f"[ingest] failed to fetch text from {url[:80]}: {e}")
+        logger.error("failed to fetch text from %s: %s", url[:80], e)
         return None
 
 
@@ -37,7 +64,7 @@ def _scrape_page_as_article(url: str, feed_url: str) -> dict | None:
 
         downloaded = trafilatura.fetch_url(url)
         if not downloaded:
-            print(f"[ingest] could not download page {url[:80]}")
+            logger.warning("could not download page %s", url[:80])
             return None
 
         metadata = trafilatura.extract_metadata(downloaded)
@@ -53,31 +80,11 @@ def _scrape_page_as_article(url: str, feed_url: str) -> dict | None:
         )
 
         if not text or len(text.strip()) < 100:
-            print(f"[ingest] insufficient content from {url[:80]}")
+            logger.warning("insufficient content from %s", url[:80])
             return None
 
         if not title:
-            from html.parser import HTMLParser
-
-            class TitleParser(HTMLParser):
-                def __init__(self):
-                    super().__init__()
-                    self.title = None
-                    self.in_title = False
-
-                def handle_starttag(self, tag, attrs):
-                    if tag == "title":
-                        self.in_title = True
-
-                def handle_data(self, data):
-                    if self.in_title:
-                        self.title = data.strip()
-
-                def handle_endtag(self, tag):
-                    if tag == "title":
-                        self.in_title = False
-
-            parser = TitleParser()
+            parser = _TitleParser()
             try:
                 parser.feed(downloaded)
                 title = parser.title
@@ -98,7 +105,7 @@ def _scrape_page_as_article(url: str, feed_url: str) -> dict | None:
         }
 
     except Exception as e:
-        print(f"[ingest] error scraping page {url[:80]}: {e}")
+        logger.error("error scraping page %s: %s", url[:80], e)
         return None
 
 
@@ -130,11 +137,11 @@ def _extract_article_links(html_content: str, base_url: str) -> list[str]:
                 if full_url not in links and full_url != base_url:
                     links.append(full_url)
 
-        print(f"[ingest] found {len(links)} potential article links from {base_url[:80]}")
+        logger.info("found %d potential article links from %s", len(links), base_url[:80])
         return links
 
     except Exception as e:
-        print(f"[ingest] error extracting links from {base_url[:80]}: {e}")
+        logger.error("error extracting links from %s: %s", base_url[:80], e)
         return []
 
 
@@ -143,13 +150,13 @@ def _scrape_blog_index(url: str) -> list[dict]:
     try:
         downloaded = trafilatura.fetch_url(url)
         if not downloaded:
-            print(f"[ingest] could not download blog index {url[:80]}")
+            logger.warning("could not download blog index %s", url[:80])
             return []
 
         article_urls = _extract_article_links(downloaded, url)
 
         if not article_urls:
-            print(f"[ingest] no article links found, trying single article scrape")
+            logger.info("no article links found, trying single article scrape")
             article = _scrape_page_as_article(url, url)
             return [article] if article else []
 
@@ -159,15 +166,15 @@ def _scrape_blog_index(url: str) -> list[dict]:
                 article = _scrape_page_as_article(article_url, url)
                 if article:
                     articles.append(article)
-                    print(f"[ingest] scraped article: {article['title'][:80]}")
+                    logger.info("scraped article: %s", article["title"][:80])
             except Exception as e:
-                print(f"[ingest] error scraping article {article_url[:80]}: {e}")
+                logger.error("error scraping article %s: %s", article_url[:80], e)
                 continue
 
         return articles
 
     except Exception as e:
-        print(f"[ingest] error processing blog index {url[:80]}: {e}")
+        logger.error("error processing blog index %s: %s", url[:80], e)
         return []
 
 
@@ -188,16 +195,14 @@ def poll_feeds(feed_urls: list[str] | None = None) -> list[dict]:
             feed = feedparser.parse(feed_url)
 
             if hasattr(feed, "bozo") and feed.bozo:
-                print(
-                    f"[ingest] warning: feed parse error for {feed_url}: "
-                    f"{feed.get('bozo_exception', 'unknown error')}"
+                logger.warning(
+                    "feed parse error for %s: %s",
+                    feed_url,
+                    feed.get("bozo_exception", "unknown error"),
                 )
 
             if not hasattr(feed, "entries") or len(feed.entries) == 0:
-                print(
-                    f"[ingest] warning: no entries found in feed {feed_url}, "
-                    "trying blog index scrape"
-                )
+                logger.warning("no entries found in feed %s, trying blog index scrape", feed_url)
                 articles = _scrape_blog_index(feed_url)
                 for article in articles:
                     insert_item(article)
@@ -212,7 +217,7 @@ def poll_feeds(feed_urls: list[str] | None = None) -> list[dict]:
 
                     title = entry.get("title", "")
                     if not title:
-                        print(f"[ingest] skipping entry with no title: {url[:80]}")
+                        logger.warning("skipping entry with no title: %s", url[:80])
                         continue
 
                     published = entry.get("published", datetime.now(timezone.utc).isoformat())
@@ -229,14 +234,14 @@ def poll_feeds(feed_urls: list[str] | None = None) -> list[dict]:
                     }
                     insert_item(item)
                     new_items.append(item)
-                    print(f"[ingest] new: {title[:80]}")
+                    logger.info("new: %s", title[:80])
 
                 except Exception as e:
-                    print(f"[ingest] error processing entry from {feed_url}: {e}")
+                    logger.error("error processing entry from %s: %s", feed_url, e)
                     continue
 
         except Exception as e:
-            print(f"[ingest] error processing feed {feed_url}: {e}")
+            logger.error("error processing feed %s: %s", feed_url, e)
             continue
 
     return new_items
