@@ -1,0 +1,7 @@
+feedparser
+trafilatura
+groq
+sentence-transformers
+numpy
+requests
+python-dotenv
