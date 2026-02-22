@@ -62,6 +62,7 @@ function getAllowedIds(env) {
 }
 
 async function sendMessage(env, chat_id, text) {
+  console.log("Sending message to chat_id", chat_id, ":", text);
   return fetch(
     `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
     {
