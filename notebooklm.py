@@ -6,6 +6,7 @@ from groq import Groq
 from config import DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS
 from db import get_today_top_items, get_conn
 
+from notifier import notify_summary
 
 def get_groq_client():
     """Lazily construct and return a Groq client using GROQ_API_KEY from env.
@@ -118,7 +119,7 @@ def create_daily_pack():
 
     print(f"[notebooklm] building daily pack for {today} ({len(items)} articles)")
     brief = _generate_brief(items)
-    _save_daily_pack(today, items, brief)
+    brief_file = _save_daily_pack(today, items, brief)
     nb_id = _create_notebooklm_notebook(today, items, brief)
 
     conn = get_conn()
@@ -129,4 +130,7 @@ def create_daily_pack():
     conn.commit()
     conn.close()
 
+    with open(brief_file, "r") as text:
+        print(f"[notebooklm] sending notification for {today} brief...")
+        notify_summary(text.read())
     print(f"[notebooklm] done. NotebookLM id: {nb_id or 'n/a (saved locally)'}")
