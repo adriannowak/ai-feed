@@ -2,7 +2,7 @@ name: Poll AI Feeds
 
 on:
   repository_dispatch:
-    types: [ feedback ]
+    types: [ poll ]
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
