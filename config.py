@@ -1,6 +1,7 @@
 FEEDS = [
     "https://huggingface.co/blog/feed.xml",
     "https://blog.vllm.ai/feed.xml",
+    "https://shekkari1999.github.io/blogs.html",  # Blog page without RSS feed (will be scraped)
     # "https://bair.berkeley.edu/blog/feed.xml",
     # add more here
 ]
