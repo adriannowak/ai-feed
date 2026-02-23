@@ -49,6 +49,7 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           # Activate the cached or freshly created virtualenv
           if [ -f .venv/bin/activate ]; then
