@@ -51,6 +51,7 @@ jobs:
           USERNAME: ${{ github.event.client_payload.username }}
           COMMAND: ${{ github.event.client_payload.command }}
           ARGS: ${{ github.event.client_payload.args }}
+          PROCESSING_MESSAGE_ID: ${{ github.event.client_payload.processing_message_id }}
         run: |
           if [ -f .venv/bin/activate ]; then
             source .venv/bin/activate

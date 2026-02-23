@@ -29,17 +29,33 @@ from db import (
 from embeddings import embed_text
 
 
-def _reply(bot_token: str, chat_id: int, text: str) -> None:
-    """Send a plain-text message to the user."""
-    resp = requests.post(
-        f"https://api.telegram.org/bot{bot_token}/sendMessage",
-        json={"chat_id": chat_id, "text": text},
-    )
+def _reply(bot_token: str, chat_id: int, text: str, message_id: int = None) -> None:
+    """Send a plain-text message to the user, or edit an existing message if message_id is provided."""
+    if message_id:
+        # Edit existing message
+        resp = requests.post(
+            f"https://api.telegram.org/bot{bot_token}/editMessageText",
+            json={"chat_id": chat_id, "message_id": message_id, "text": text},
+        )
+    else:
+        # Send new message
+        resp = requests.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json={"chat_id": chat_id, "text": text},
+        )
+
     if not resp.ok:
         print(f"[run_command] Telegram reply failed: {resp.text}")
+        # Fallback: if edit fails, send as new message
+        if message_id:
+            print(f"[run_command] Edit failed, sending as new message")
+            requests.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={"chat_id": chat_id, "text": text},
+            )
 
 
-def handle_start(bot_token: str, user_id: int, chat_id: int, username: str) -> None:
+def handle_start(bot_token: str, user_id: int, chat_id: int, username: str, message_id: int = None) -> None:
     register_user(user_id, username or None)
     for feed_url in FEEDS:
         add_user_feed(user_id, feed_url)
@@ -50,12 +66,13 @@ def handle_start(bot_token: str, user_id: int, chat_id: int, username: str) -> N
         "Use /add <rss_url> to subscribe to additional feeds.\n"
         "Use /track <article_url> to seed your taste profile with a specific article.\n\n"
         f"You are now subscribed to {len(FEEDS)} default feed(s).",
+        message_id=message_id,
     )
 
 
-def handle_add(bot_token: str, user_id: int, chat_id: int, username: str, url: str) -> None:
+def handle_add(bot_token: str, user_id: int, chat_id: int, username: str, url: str, message_id: int = None) -> None:
     if not url:
-        _reply(bot_token, chat_id, "Usage: /add <rss_url>")
+        _reply(bot_token, chat_id, "Usage: /add <rss_url>", message_id=message_id)
         return
 
     import feedparser
@@ -67,21 +84,25 @@ def handle_add(bot_token: str, user_id: int, chat_id: int, username: str, url: s
             bot_token,
             chat_id,
             f"⚠️ Could not parse a valid RSS feed at:\n{url}\n\nPlease check the URL and try again.",
+            message_id=message_id,
         )
         return
 
     add_user_feed(user_id, url)
     feed_title = feed.feed.get("title", url)
-    _reply(bot_token, chat_id, f"✅ Subscribed to {feed_title}")
+    _reply(bot_token, chat_id, f"✅ Subscribed to {feed_title}", message_id=message_id)
 
 
-def handle_track(bot_token: str, user_id: int, chat_id: int, username: str, url: str) -> None:
+def handle_track(bot_token: str, user_id: int, chat_id: int, username: str, url: str, message_id: int = None) -> None:
     if not url:
-        _reply(bot_token, chat_id, "Usage: /track <article_url>")
+        _reply(bot_token, chat_id, "Usage: /track <article_url>", message_id=message_id)
         return
 
     register_user(user_id, username or None)
-    _reply(bot_token, chat_id, "⏳ Fetching and embedding article…")
+
+    # If no message_id, send a new "Fetching" message
+    if not message_id:
+        _reply(bot_token, chat_id, "⏳ Fetching and embedding article…")
 
     try:
         import trafilatura
@@ -98,20 +119,20 @@ def handle_track(bot_token: str, user_id: int, chat_id: int, username: str, url:
 
         embedding = embed_text(text) if text else None
         add_tracked_article(user_id, url, embedding)
-        _reply(bot_token, chat_id, f"✅ Tracking article for your taste profile:\n{url}")
+        _reply(bot_token, chat_id, f"✅ Tracking article for your taste profile:\n{url}", message_id=message_id)
     except Exception as exc:
         print(f"[run_command] error tracking {url}: {exc}")
-        _reply(bot_token, chat_id, f"⚠️ Could not track article: {exc}")
+        _reply(bot_token, chat_id, f"⚠️ Could not track article: {exc}", message_id=message_id)
 
 
-def handle_feeds(bot_token: str, user_id: int, chat_id: int, username: str) -> None:
+def handle_feeds(bot_token: str, user_id: int, chat_id: int, username: str, message_id: int = None) -> None:
     register_user(user_id, username or None)
     feeds = get_user_feeds(user_id)
     if not feeds:
-        _reply(bot_token, chat_id, "You have no feed subscriptions yet. Use /add <rss_url>.")
+        _reply(bot_token, chat_id, "You have no feed subscriptions yet. Use /add <rss_url>.", message_id=message_id)
         return
     lines = "\n".join(f"• {f}" for f in feeds)
-    _reply(bot_token, chat_id, f"Your subscriptions ({len(feeds)}):\n{lines}")
+    _reply(bot_token, chat_id, f"Your subscriptions ({len(feeds)}):\n{lines}", message_id=message_id)
 
 
 def main() -> None:
@@ -123,8 +144,15 @@ def main() -> None:
     username = os.environ.get("USERNAME", "")
     command = os.environ.get("COMMAND", "").lstrip("/").lower()
     args = os.environ.get("ARGS", "").strip()
+    processing_message_id = os.environ.get("PROCESSING_MESSAGE_ID")
 
-    print(f"[run_command] user={user_id} command={command} args={args!r}")
+    # Convert to int if present
+    if processing_message_id and processing_message_id.isdigit():
+        processing_message_id = int(processing_message_id)
+    else:
+        processing_message_id = None
+
+    print(f"[run_command] user={user_id} command={command} args={args!r} message_id={processing_message_id}")
 
     if user_id not in ALLOWED_USER_IDS:
         print(f"[run_command] DENIED: user={user_id} is not on the allowlist")
@@ -132,17 +160,18 @@ def main() -> None:
             bot_token,
             chat_id,
             "⛔ Sorry, this bot is invite-only. Contact the owner to request access.",
+            message_id=processing_message_id,
         )
         return
 
     if command == "start":
-        handle_start(bot_token, user_id, chat_id, username)
+        handle_start(bot_token, user_id, chat_id, username, processing_message_id)
     elif command == "add":
-        handle_add(bot_token, user_id, chat_id, username, args)
+        handle_add(bot_token, user_id, chat_id, username, args, processing_message_id)
     elif command == "track":
-        handle_track(bot_token, user_id, chat_id, username, args)
+        handle_track(bot_token, user_id, chat_id, username, args, processing_message_id)
     elif command == "feeds":
-        handle_feeds(bot_token, user_id, chat_id, username)
+        handle_feeds(bot_token, user_id, chat_id, username, processing_message_id)
     else:
         _reply(
             bot_token,
