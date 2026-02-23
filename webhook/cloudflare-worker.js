@@ -161,8 +161,16 @@ export default {
         return new Response("OK", { status: 200 });
       }
       if (command === "poll" || command == "daily") {
-        await sendMessage(env, chat_id, "⏳ Polling for new articles…");
-        await dispatchToGitHub(env, command, {});
+        const ackResponse = await sendMessage(env, chat_id, "⏳ Polling for new articles…");
+        const ackData = await ackResponse.json();
+        const processing_message_id = ackData?.result?.message_id || null;
+        console.log("Sent ACK message for", command, ", message_id:", processing_message_id);
+
+        await dispatchToGitHub(env, command, {
+          user_id,
+          chat_id,
+          processing_message_id,
+        });
         return new Response("OK", { status: 200 });
       }
 
