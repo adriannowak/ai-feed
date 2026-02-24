@@ -118,9 +118,9 @@ def create_daily_pack():
     for user in users:
         user_id = user["user_id"]
 
-        if _already_created(user_id, today):
-            logger.info("daily pack already created for user=%s today (%s)", user_id, today)
-            continue
+        # if _already_created(user_id, today):
+        #     logger.info("daily pack already created for user=%s today (%s)", user_id, today)
+        #     continue
 
         items = get_today_top_items(user_id, DAILY_PACK_MIN_SCORE, DAILY_PACK_MAX_ITEMS)
 
