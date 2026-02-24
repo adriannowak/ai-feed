@@ -152,6 +152,16 @@ def insert_item(item: dict):
     conn.close()
 
 
+def update_item_summary(item_id: str, summary: str):
+    conn = get_conn()
+    conn.execute(
+        "UPDATE items SET summary=? WHERE id=?",
+        (summary, item_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 # --- Per-user scoring ---
 
 def save_user_score(user_id: int, item_id: str, score: float, topics: list, reason: str):

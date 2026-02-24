@@ -19,7 +19,7 @@ def embed_text(text: str) -> list[float]:
 
 
 def embed_item(item: dict) -> list[float]:
-    combined = f"{item['title']}\n\n{item.get('text', '')[:400]}"
+    combined = f"{item['title']}\n\n{item.get('text', '')[:1000]}"
     return embed_text(combined)
 
 
@@ -51,6 +51,26 @@ def max_similarity_to_liked(
         liked_emb = json.loads(item["embedding"])
         scores.append(cosine_similarity(candidate_emb, liked_emb))
     return max(scores) if scores else 0.0
+
+
+def avg_similarity_to_liked(
+    candidate_emb: list[float],
+    liked_items: list[dict],
+    top_n: int = 5,
+) -> float:
+    """Average similarity to the top-N most similar liked items."""
+    if not liked_items:
+        return 0.0
+    scores = []
+    for item in liked_items:
+        if not item.get("embedding"):
+            continue
+        liked_emb = json.loads(item["embedding"])
+        scores.append(cosine_similarity(candidate_emb, liked_emb))
+    if not scores:
+        return 0.0
+    scores.sort(reverse=True)
+    return float(np.mean(scores[:top_n]))
 
 
 def min_similarity_to_disliked(
