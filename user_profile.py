@@ -11,7 +11,7 @@ def build_preference_profile(user_id: int) -> dict:
     liked_titles = [i["title"] for i in liked if i.get("title")]
     disliked_titles = [i["title"] for i in disliked if i.get("title")]
 
-    liked_topics = []
+    liked_topics = ["inference", "vllm", "emergent misalignment", "prompt injections", "devops", "aiops"]
     for i in liked:
         if i.get("llm_topics"):
             try:
