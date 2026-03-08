@@ -11,7 +11,7 @@ def build_preference_profile(user_id: int) -> dict:
     liked_titles = [i["title"] for i in liked if i.get("title")]
     disliked_titles = [i["title"] for i in disliked if i.get("title")]
 
-    liked_topics = ["inference", "vllm", "emergent misalignment", "prompt injections", "devops", "aiops"]
+    liked_topics = []
     for i in liked:
         if i.get("llm_topics"):
             try:
@@ -20,7 +20,7 @@ def build_preference_profile(user_id: int) -> dict:
                 pass
 
     top_topics = [t for t, _ in Counter(liked_topics).most_common(15)]
-
+    top_topics.extend(["inference", "vllm", "emergent misalignment", "prompt injections", "devops", "aiops", "langchain", "rag"])
     return {
         "liked_titles": liked_titles,
         "disliked_titles": disliked_titles,
