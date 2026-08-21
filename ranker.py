@@ -23,7 +23,7 @@ from user_profile import build_preference_profile, profile_to_text
 
 logger = logging.getLogger(__name__)
 
-JUDGE_MODEL = "llama-3.3-70b-versatile"
+JUDGE_MODEL = "openai/gpt-oss-120b"
 
 
 def _cold_start_matches(item: dict) -> bool:
