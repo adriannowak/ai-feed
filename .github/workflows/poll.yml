@@ -35,7 +35,7 @@ jobs:
             .venv
           key: ${{ runner.os }}-python-${{ matrix.python-version || '3.11' }}-deps-${{ hashFiles('requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-python-deps-
+            ${{ runner.os }}-python-deps
 
       - name: Install dependencies (only on cache miss)
         if: steps.cache-pip.outputs.cache-hit != 'true'
