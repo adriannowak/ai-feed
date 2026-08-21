@@ -29,7 +29,7 @@ Write a concise daily brief in Markdown:
 Be concise and technical."""
     try:
         resp = chat_with_retry(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
         )
