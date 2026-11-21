@@ -30,7 +30,7 @@ jobs:
             ~/.cache/torch
             ~/.cache/transformers
             .venv
-          key: ${{ runner.os }}-python-3.11-deps-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-2-python-3.11-deps-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-python-deps-
 
