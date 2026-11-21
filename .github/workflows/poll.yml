@@ -33,7 +33,7 @@ jobs:
             ~/.cache/torch
             ~/.cache/transformers
             .venv
-          key: aifeed-${{ runner.os }}-python-${{ matrix.python-version || '3.11' }}-deps-${{ hashFiles('requirements.txt') }}
+          key: aifeed2-${{ runner.os }}-python-${{ matrix.python-version || '3.11' }}-deps-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             aifeed-${{ runner.os }}-python-deps
 
